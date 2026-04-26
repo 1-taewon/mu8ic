@@ -81,10 +81,10 @@ export const MinimalistHero = ({
             </NavLink>
           ))}
           <a
-            href="#"
+            href={readMoreLink}
             className="rounded-full bg-foreground px-5 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
           >
-            GET STARTED
+            {navLinks.some(l => l.label === "WORKSPACE") ? "WORKSPACE" : "GET STARTED"}
           </a>
         </div>
         <motion.button

@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   // if "next" is in search params, use it as the redirect URL
-  const next = searchParams.get('next') ?? '/';
+  const next = searchParams.get('next') ?? '/workspace';
 
   if (code) {
     const cookieStore = await cookies();
@@ -19,19 +19,31 @@ export async function GET(request: Request) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
+            try {
+              cookieStore.set({ name, value, ...options });
+            } catch (error) {
+              // The `set` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
           },
           remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
+            try {
+              cookieStore.set({ name, value: '', ...options });
+            } catch (error) {
+              // The `delete` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
           },
         },
       }
     );
+    
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+    
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
-    } else {
-      console.error('Supabase Auth Error:', error.message);
     }
   }
 

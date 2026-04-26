@@ -116,8 +116,73 @@ import { MinimalistHero } from '@/components/hero/MinimalistHero';
 
 ---
 
+## 2026-04-26
+
+### Q9. GitHub Push Protection 에러 (비밀 키 노출)
+
+**문제:** `scratch/` 폴더 내 스크립트에 Supabase Secret Key를 하드코딩하여 푸시가 차단됨.
+
+**해결:**
+1.  **코드 수정**: `.env.local`에서 환경 변수를 읽어오도록 로직 변경 (Node.js 환경 대응).
+2.  **Git 히스토리 수정**: `git commit --amend`를 통해 마지막 커밋에서 비밀 키 기록 삭제.
+3.  **보안 조치**: Supabase 대시보드에서 Service Role Key 재발급(Rotate).
+
+---
+
+### Q10. Workspace 페이지 구축
+
+**요청:** 로그인한 사용자를 위한 전용 공간 생성 및 `#171717` 배경 디자인 적용.
+
+**작업 내용:**
+- `app/workspace/page.tsx` 생성.
+- 프리미엄 대시보드 레이아웃 (Glassmorphism, 통계 카드, 트랙 목록) 구현.
+- 비로그인 사용자를 `/auth`로 자동 리다이렉트 처리.
+
+---
+
+### Q11. 구글 로그인 후 리다이렉트 오류 (Auth Callback Error)
+
+**문제:** 로그인 성공 후 `#access_token` 해시 프래그먼트가 포함된 URL로 리다이렉트되어 서버에서 인증 코드를 읽지 못함 (`no_code_found`).
+
+**원인:** 클라이언트 사이드 `supabase` 객체가 SSR에 적합하지 않은 기본 방식(Implicit Flow)으로 동작함.
+
+**해결:**
+- `lib/supabase.ts`에서 `@supabase/ssr`의 `createBrowserClient`를 사용하도록 수정.
+- PKCE Flow를 활성화하여 서버와 쿠키를 정상적으로 공유하게 함.
+
+---
+
+### Q12. 네비게이션 동적화
+
+**작업 내용:**
+- `AuthContext`를 연동하여 로그인 상태에 따라 버튼을 `LOGIN` 또는 `WORKSPACE`로 자동 변경.
+- 로그인 성공 시 자동으로 `/workspace`로 이동하도록 콜백 및 권한 확인 로직 고도화.
+
+### Q13. Workspace Navbar 구축 (Liquid Glass Design)
+
+**요청:** 투명한 배경, 중앙 검색창, 우측 사용자 프로필 팝오버(로그아웃 포함)를 갖춘 Liquid Glass 디자인의 Navbar 구현.
+
+**작업 내용:**
+- `components/workspace/navbar.tsx` 생성.
+- `framer-motion`을 이용한 호버 팝오버 및 액체 유리 질감 디자인 적용.
+- `AuthContext` 연동을 통한 실시간 사용자 정보 및 로그아웃 기능 통합.
+- `app/workspace/page.tsx` 레이아웃 리팩토링 (Navbar 상단 고정).
+
+### Q14. 하단 프롬프트 입력창 구축 (Radix UI & Framer Motion)
+
+**요청:** 이미지 업로드, 음성 녹음, 검색/생각/캔버스 모드 전환 기능을 갖춘 고급 프롬프트 창을 화면 하단에 고정.
+
+**작업 내용:**
+- `@radix-ui/react-tooltip`, `@radix-ui/react-dialog` 패키지 설치.
+- `components/workspace/prompt-input-box.tsx` 생성.
+- `framer-motion`을 이용한 시각적 효과(비주얼라이저, 모달 애니메이션 등) 적용.
+- `app/workspace/page.tsx` 하단에 고정 배치 및 레이아웃 최적화.
+
+---
+
 ## 핵심 교훈
 
 1. **lucide-react 최신 버전에서 SNS 브랜드 아이콘 없음** — `Music`, `Globe`, `Headphones` 등 범용 아이콘 사용
 2. **Server Component → Client Component로 함수 전달 불가** — props로 React 컴포넌트/함수를 넘길 때는 두 파일 모두 `'use client'` 필요
-3. **PowerShell 실행 정책 문제** — `npm` 명령은 PowerShell 대신 `cmd /c` 를 사용하거나 터미널에서 직접 실행
+3. **Supabase SSR 환경에서는 `createBrowserClient` 필수** — Next.js App Router에서 서버와 세션을 공유하려면 PKCE Flow를 지원하는 브라우저 전용 클라이언트 사용 필요
+4. **Git 히스토리에 포함된 비밀 키는 `amend`로 제거 가능** — 하지만 푸시 전이라도 이미 노출된 키는 반드시 재발급(Rotate) 권장

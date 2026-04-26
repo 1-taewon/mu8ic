@@ -4,8 +4,20 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function AuthPage() {
+    const { user, loading } = useAuth();
+    const router = useRouter();
+
+    React.useEffect(() => {
+        if (!loading && user) {
+            router.push('/workspace');
+        }
+    }, [user, loading, router]);
+
+    if (loading) return null; // Or a simple loader
     return (
         <div className="relative min-h-screen w-full overflow-hidden bg-[#171717] flex items-center justify-center font-sans">
             {/* Liquid Background Elements */}
