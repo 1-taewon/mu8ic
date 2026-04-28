@@ -2,7 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
-  /* config options here */
+  experimental: {
+    turbopack: {
+      resolveAlias: {
+        fs: false,
+        path: false,
+        crypto: false,
+      },
+    },
+  },
 };
 
 export default nextConfig;

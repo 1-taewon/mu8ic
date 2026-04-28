@@ -180,9 +180,56 @@ import { MinimalistHero } from '@/components/hero/MinimalistHero';
 
 ---
 
+## 2026-04-28
+
+### Q15. Replicate AI 음악 생성 엔진 연동
+
+**요청:** `visoar/ace-step-1.5` 모델을 사용하여 프롬프트 기반 음악 생성 기능을 구현하고 결과물을 Supabase에 저장.
+
+**작업 내용:**
+- `app/actions/generate-music.ts`: Replicate API 호출 → 오디오 다운로드 → Supabase Storage 업로드 → DB 메타데이터 저장 과정을 수행하는 Server Action 구현.
+- `lib/supabase-server.ts`: RLS 우회를 위한 서비스 롤 기반 관리자 클라이언트 설정.
+- `scripts/setup-supabase.mjs`: `musics` 테이블 및 스토리지 버킷 자동 생성을 위한 SQL 스크립트 작성.
+
+### Q16. 워크스페이스 프리미엄 UI 개편
+
+**요청:** 스크린샷 디자인을 바탕으로 워크스페이스의 룩앤필을 전문가급 다크 모드로 업그레이드.
+
+**작업 내용:**
+- `components/workspace/music-list.tsx`: 파형(Waveform) 비주얼라이저, 재생 컨트롤러, 다운로드 버튼이 포함된 프리미엄 카드 디자인 적용.
+- `components/workspace/prompt-input.tsx`: 필(Pill) 형태의 둥근 입력창과 아이콘 툴바 배치.
+- `components/workspace/workspace-navbar.tsx`: 미니멀한 검색창과 프로필 팝오버로 디자인 간소화 및 세련미 강화.
+
+### Q18. Hugging Face Inference API 장애 및 404 에러
+
+**현상:** 공식 MusicGen 모델 호출 시 `404 Not Found` 또는 `503 Service Unavailable` 지속 발생.
+**원인:** 무료 공유 API의 오디오 생성 모델 지원 중단 혹은 트래픽 폭주로 인한 가용성 상실.
+**조치:** 외부 API 의존성을 낮추기 위해 브라우저 로컬 추론(Transformers.js) 도입 결정.
+
+### Q19. 브라우저 로컬 추론(Transformers.js) 도입 및 네트워크 에러
+
+**현상:** Web Worker 내부에서 `importScripts`를 통해 CDN 라이브러리 로드 시 `NetworkError` 발생.
+**원인:** 브라우저의 보안 정책(CSP) 혹은 네트워크 일시 장애로 인해 외부 스크립트 실행 차단.
+**해결:** 
+1.  `public/transformers.min.js`로 라이브러리를 직접 다운로드하여 로컬 자원화.
+2.  워커 내부 경로를 `/transformers.min.js`로 수정하여 외부 의존성 제거.
+3.  다운로드 퍼센트(%)를 실시간으로 보여주는 진행률 로직 구현.
+
+### Q20. 프로젝트 개발 종료 (인프라 완비 및 환경 제약)
+
+**상태:** 
+- **UI/UX:** 전문가급 다크 모드 작업 공간 및 실시간 진행률 피드백 시스템 구축 완료.
+- **Storage:** Supabase를 통한 생성 결과물 저장 및 히스토리 관리 로직 완비.
+- **AI Engine:** 브라우저 로컬 추론 시스템(Web Worker) 구축 완료.
+**결론:** 외부 API의 유료화 장벽과 로컬 브라우저의 리소스 한계(300MB+ 모델 로드)를 확인하였으며, 향후 고성능 GPU 인프라 확보 시 즉시 서비스가 가능한 수준의 아키텍처를 완성하고 개발 종료.
+
+---
+
 ## 핵심 교훈
 
 1. **lucide-react 최신 버전에서 SNS 브랜드 아이콘 없음** — `Music`, `Globe`, `Headphones` 등 범용 아이콘 사용
 2. **Server Component → Client Component로 함수 전달 불가** — props로 React 컴포넌트/함수를 넘길 때는 두 파일 모두 `'use client'` 필요
 3. **Supabase SSR 환경에서는 `createBrowserClient` 필수** — Next.js App Router에서 서버와 세션을 공유하려면 PKCE Flow를 지원하는 브라우저 전용 클라이언트 사용 필요
 4. **Git 히스토리에 포함된 비밀 키는 `amend`로 제거 가능** — 하지만 푸시 전이라도 이미 노출된 키는 반드시 재발급(Rotate) 권장
+5. **외부 API(Replicate/HF)의 불확실성 대비** — 유료 결제(`402`)나 서버 장애(`503`)에 대비하여 클라이언트 사이드 추론(Transformers.js)과 같은 Fallback 전략이 필수적임
+6. **Web Worker 자원 관리** — 거대 AI 모델을 다룰 때는 `public` 폴더를 통한 로컬 자원 서빙과 상세한 진행률(Progress) 표시가 사용자 경험(UX)을 결정함

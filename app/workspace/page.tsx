@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils';
 import { WorkspaceNavbar } from '@/components/workspace/workspace-navbar';
 import { PromptInputBox } from '@/components/workspace/prompt-input';
 import { MusicList } from '@/components/workspace/music-list';
-import { generateMusic, getUserMusics, deleteMusic } from '@/app/actions/generate-music';
+import { generateMusic, saveGeneratedMusic, getUserMusics, deleteMusic } from '@/app/actions/generate-music';
 import type { MusicTrack } from '@/app/actions/generate-music';
+import { useMusicGenerator } from '@/hooks/use-music-generator';
 
 export default function WorkspacePage() {
     const { user, loading } = useAuth();
@@ -19,6 +20,8 @@ export default function WorkspacePage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatingPrompt, setGeneratingPrompt] = useState('');
     const [error, setError] = useState<string | null>(null);
+
+
 
     // 음악 목록 불러오기
     const fetchTracks = useCallback(async () => {
@@ -39,25 +42,34 @@ export default function WorkspacePage() {
         if (user) fetchTracks();
     }, [user, fetchTracks]);
 
-    // 프롬프트 전송 → 음악 생성
-    const handleSend = async (message: string) => {
-        if (!user || isGenerating) return;
+    const { generate, status: generatorStatus, progress } = useMusicGenerator();
 
-        setError(null);
+    const handleSend = async (message: string) => {
+        if (!user) return;
+        
         setIsGenerating(true);
+        setError(null);
         setGeneratingPrompt(message);
 
         try {
-            const result = await generateMusic(message, user.id);
+            // 1. 브라우저 로컬에서 AI 음악 생성
+            const wavBlob = await generate(message);
+            
+            // 2. 생성된 파일을 FormData에 담아 서버로 전송 및 저장
+            const formData = new FormData();
+            formData.append('file', wavBlob, 'music.wav');
+            formData.append('prompt', message);
 
-            if (result.success) {
-                await fetchTracks();
+            const result = await saveGeneratedMusic(formData, user.id);
+            
+            if (result.success && result.data) {
+                setTracks(prev => [result.data as MusicTrack, ...prev]);
             } else {
-                setError(result.error || 'Generation failed. Please try again.');
-                console.error('Generation failed:', result.error);
+                setError(result.error || '저장에 실패했습니다.');
             }
-        } catch (err) {
-            setError('An unexpected error occurred.');
+        } catch (err: any) {
+            console.error('Generation failed:', err);
+            setError(err.message || '음악 생성 중 오류가 발생했습니다.');
         } finally {
             setIsGenerating(false);
             setGeneratingPrompt('');
@@ -112,6 +124,33 @@ export default function WorkspacePage() {
                             className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
                         >
                             {error}
+                        </motion.div>
+                    )}
+
+                    {isGenerating && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="mb-8 flex flex-col items-center space-y-3"
+                        >
+                            <div className="flex items-center space-x-3 text-white/60 text-xs font-medium tracking-wider uppercase">
+                                <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-pulse" />
+                                <span>
+                                    {generatorStatus === 'loading-model' 
+                                        ? `Downloading Model (${progress}%)` 
+                                        : 'Generating Music...'}
+                                </span>
+                            </div>
+                            {generatorStatus === 'loading-model' && (
+                                <div className="w-48 h-0.5 bg-white/5 rounded-full overflow-hidden">
+                                    <motion.div
+                                        className="h-full bg-white/40"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progress}%` }}
+                                        transition={{ duration: 0.3 }}
+                                    />
+                                </div>
+                            )}
                         </motion.div>
                     )}
 

@@ -1,12 +1,8 @@
 'use server';
 
-import Replicate from 'replicate';
+
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase-server';
-
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN!,
-});
 
 export interface MusicTrack {
     id: string;
@@ -20,46 +16,66 @@ export interface MusicTrack {
     created_at: string;
 }
 
+import Replicate from 'replicate';
+
+const replicate = new Replicate({
+    auth: process.env.REPLICATE_API_TOKEN!,
+});
+
 export async function generateMusic(prompt: string, userId: string) {
     try {
-        // 1. Replicate API 호출
-        const input = {
-            lyrics: "",
-            caption: prompt,
-            duration: 60,
-            timeout_seconds: 30,
-        };
+        console.log('Generating music using Replicate for prompt:', prompt);
+        
+        // 1. 모델의 최신 버전 정보를 동적으로 가져옴 (422 에러 방지)
+        const model = await replicate.models.get("meta", "musicgen");
+        const version = model.latest_version?.id;
 
+        if (!version) {
+            throw new Error('모델 버전을 가져오는 데 실패했습니다.');
+        }
+
+        // 2. 최신 버전으로 실행
+        // @ts-ignore
         const output = await replicate.run(
-            "visoar/ace-step-1.5:fd851baef553cb1656f4a05e8f2f8641672f10bc808718f5718b4b4bb2b07794",
-            { input }
+            `meta/musicgen:${version}`,
+            {
+                input: {
+                    prompt: prompt,
+                    duration: 10,
+                }
+            }
         );
 
-        // 2. 생성된 오디오 URL 가져오기
-        const outputArray = output as Array<{ url: () => string }>;
-        const audioUrl = outputArray[0].url();
+        if (!output || typeof output !== 'string') {
+            throw new Error('AI 서버로부터 올바른 응답(URL)을 받지 못했습니다.');
+        }
 
-        // 3. 오디오 파일 다운로드
-        const response = await fetch(audioUrl);
-        const audioBuffer = Buffer.from(await response.arrayBuffer());
+        const audioUrl = output;
+        console.log('Audio generated at:', audioUrl);
 
-        // 4. Supabase Storage에 업로드
-        const fileName = `${userId}/${Date.now()}_${crypto.randomUUID()}.mp3`;
+        // 반환된 URL에서 오디오 데이터를 가져옴
+        const audioResponse = await fetch(audioUrl);
+        const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+        
+        console.log('Music generated and downloaded successfully.');
+
+        // 1. Supabase Storage에 업로드
+        const fileName = `${userId}/${Date.now()}_${crypto.randomUUID()}.wav`;
         const { error: uploadError } = await supabaseAdmin.storage
             .from('musics')
             .upload(fileName, audioBuffer, {
-                contentType: 'audio/mpeg',
+                contentType: 'audio/wav',
                 upsert: false,
             });
 
         if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-        // 5. Public URL 생성
+        // 2. Public URL 생성
         const { data: urlData } = supabaseAdmin.storage
             .from('musics')
             .getPublicUrl(fileName);
 
-        // 6. musics 테이블에 기록
+        // 3. musics 테이블에 기록
         const title = prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
         const { data: musicData, error: insertError } = await supabaseAdmin
             .from('musics')
@@ -69,7 +85,7 @@ export async function generateMusic(prompt: string, userId: string) {
                 prompt,
                 file_path: fileName,
                 file_url: urlData.publicUrl,
-                duration: 60,
+                duration: 10,
                 status: 'completed',
             })
             .select()
@@ -81,6 +97,58 @@ export async function generateMusic(prompt: string, userId: string) {
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         console.error('Music generation error:', message);
+        return { success: false, error: message };
+    }
+}
+
+export async function saveGeneratedMusic(formData: FormData, userId: string) {
+    try {
+        const file = formData.get('file') as File;
+        const prompt = formData.get('prompt') as string;
+
+        if (!file || !prompt) throw new Error('Missing file or prompt');
+
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = Buffer.from(arrayBuffer);
+
+        // 1. Supabase Storage에 업로드
+        const fileName = `${userId}/${Date.now()}_${crypto.randomUUID()}.wav`;
+        const { error: uploadError } = await supabaseAdmin.storage
+            .from('musics')
+            .upload(fileName, audioBuffer, {
+                contentType: 'audio/wav',
+                upsert: false,
+            });
+
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+        // 2. Public URL 생성
+        const { data: urlData } = supabaseAdmin.storage
+            .from('musics')
+            .getPublicUrl(fileName);
+
+        // 3. musics 테이블에 기록
+        const title = prompt.length > 50 ? prompt.substring(0, 50) + '...' : prompt;
+        const { data: musicData, error: insertError } = await supabaseAdmin
+            .from('musics')
+            .insert({
+                user_id: userId,
+                title,
+                prompt,
+                file_path: fileName,
+                file_url: urlData.publicUrl,
+                duration: 10,
+                status: 'completed',
+            })
+            .select()
+            .single();
+
+        if (insertError) throw new Error(`DB insert failed: ${insertError.message}`);
+
+        return { success: true, data: musicData as MusicTrack };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Music save error:', message);
         return { success: false, error: message };
     }
 }
